@@ -1,0 +1,383 @@
+<!doctype html>
+<html>
+<head>
+    <title>NVVisualisaatio</title>
+    <meta charset="utf-8" />
+    <style type="text/css">
+    #canvas{background-color: #ccc; }
+    </style>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <script src="NVLayer.js"></script>
+    <script src="NVNetwork.js"></script>
+ 
+<script type="text/javascript">
+
+$( document ).ready(function() { 
+    var canvas = getCanvas();
+    canvas.addEventListener("mousedown", drawMousePosition, false);
+    nvRunning = 0;
+    neuralData = new Array();
+    basicData();
+ });
+
+neuralData = new Array();
+network = null;
+nvRunning = 0;
+
+function drawMousePosition(event)
+{
+    var canvas = document.getElementById('canvas'),
+    x = event.pageX - canvas.offsetLeft,
+    y = event.pageY - canvas.offsetTop;
+
+    var pointData = 0;
+    if( event.shiftKey)
+    {
+        pointData = 1;
+    }
+    else
+    {
+        pointData = 0;
+    }
+
+    var data  = {
+		x:(x/canvas.width),
+		y:(y/canvas.height),
+		color: pointData
+    };
+    neuralData.push(data);
+    drawPointData(x, y, pointData);
+}
+
+function drawPointData(x,y, data)
+{
+    var canvas = getCanvas();
+    var ctx=canvas.getContext("2d");
+    if( data === 1)
+    {
+        ctx.fillStyle = "#f00";
+    } else 
+    {
+        ctx.fillStyle = "#00f";
+    }
+    ctx.fillRect(x,y,3,3); 
+}
+
+function getCanvas()
+{
+    return $("#canvas").get(0);
+}
+
+function drawData(clear)
+{
+    var canvas = getCanvas();
+
+    var ctx=canvas.getContext("2d");
+
+    if( clear )
+    {
+        clearCanvas(ctx);
+    }
+    for(var i=0; i<neuralData.length;i++)
+    {
+        drawPointData(neuralData[i].x * canvas.width, neuralData[i].y*canvas.height, neuralData[i].color);
+    }
+}
+
+function clearCanvas(ctx)
+{
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+}
+
+function clearNeuralData()
+{
+    while (neuralData.length > 0) { neuralData.pop(); }
+}
+
+function basicData2()
+{
+    clearNeuralData();  
+    //basicData();
+    for(var x=0; x<60; x++)
+    {
+        var height = Math.sin((x+6)/60*2*Math.PI) *45 + 160;
+        var data  = {
+			x:((x*5)/canvas.width),
+			y:((height + 10)/canvas.height),
+			color: 0
+        };
+        neuralData.push(data);
+        var data  = {
+			x:((x*5)/canvas.width),
+			y:((height - 10)/canvas.height),
+			color: 1
+		};
+		neuralData.push(data);
+    }
+    drawData(true);
+}
+
+function basicData()
+{
+    clearNeuralData();
+    for(var x=0; x<15; x++)
+    {
+        for(var y=0; y<15; y++)
+        {
+            var height = Math.sin((x+2)/15*2*Math.PI) *45 + 150;
+            
+            if( y*20 > height)
+            {
+                color = 0;
+            } else {
+                color = 1;
+            }
+            
+            var data  = {
+                x:((10+x*20)/canvas.width),
+                y:((10+y*20)/canvas.height),
+                color: color
+            };
+            neuralData.push(data);
+        }
+    }
+    drawData(true);
+}
+
+function calculateNV()
+{
+    if( neuralData.length === 0 || nvRunning !== 0 )
+    {
+        alert("Laskettavia pisteitä ei ole")
+        return;
+    }
+    
+    var hidden =parseInt($( "#neurons").val());
+    
+    if(  hidden == NaN )
+    {
+        alert("Neuronien määrä ei ole luku");
+        return;
+    }
+    
+    var learningRate =parseFloat($( "#learningRate").val());
+    var momentum = parseFloat($( "#momentum").val());
+    
+    if(  learningRate == NaN )
+    {
+        alert("Oppimisnopeus ei ole luku");
+        return;
+    }
+    
+    if(  momentum == NaN )
+    {
+        alert("Momentti ei ole luku");
+        return;
+    }
+    
+    var fps = parseInt($("#fps").val());
+    if(  fps == NaN )
+    {
+        alert("FPS ei ole luku");
+        return;
+    }
+    
+    fps = Math.max(fps, 1);
+    fps = Math.min(fps, 50);
+
+    nvRunning = 1;
+
+    network = new NVNetwork([2,hidden,2]);
+    network.Reset();
+
+    var epoch=0;
+    var fpsCounter = 0;
+    function epochOperation()
+    {
+        epoch++;
+        fpsCounter++;
+        $("#epoch").text("Calculating epoch: " + epoch); 
+        var error = trainEpoch(learningRate, momentum);
+        
+        
+        $("#error").text("Total error: " + error); 
+     
+        if( fpsCounter >= fps )
+        {
+            drawNeural();
+            fpsCounter = 0;
+        }
+        
+        if( epoch>1000 || nvRunning == 2 || error < 0.015)
+        {
+            if( error < 0.02)
+            {
+                $("#error").text("Total error: " + error + " -- stopping.");
+            }
+            clearInterval(intervalId);
+            drawNeural();
+			nvRunning = 0;
+        }
+    }
+    var intervalId = setInterval(epochOperation, 40);	
+}
+
+function stopNV()
+{
+    if( nvRunning == 1) 
+    {
+        nvRunning = 2;
+    }
+}
+
+function Color(r, g, b)
+{
+    /* slow...
+    r = Math.max(0, r);
+    r = Math.min(255, r);
+    g = Math.max(0, g);
+    g = Math.min(255, g);
+    b = Math.max(0, b);
+    b = Math.min(255, b);
+    */
+	
+    return "#" + r.toString(16) + g.toString(16) + b.toString(16); 
+}
+
+function drawNeural()
+{
+    var canvas = getCanvas();
+    var ctx=canvas.getContext("2d");
+    var color;
+    var color2;
+    for(var x=0; x<300; x=x+2)
+    {
+        for(var y=0; y<300; y=y+2)
+        {
+            network.layers[0].outputValue[0] = x / canvas.width;
+            network.layers[0].outputValue[1] = y / canvas.height;
+            network.FeedForward();
+            if( network.layers[2].outputValue[0]<network.layers[2].outputValue[1])
+            {
+            	color = 1;
+            } else 
+            {
+            	color = 0;
+            }
+          
+            if( color === 1)
+            {
+                color2=Math.round(network.layers[2].outputValue[1]*5);
+                ctx.fillStyle = Color(175+color2*16, 160, 160);
+            } else 
+            {
+                color2=Math.round(network.layers[2].outputValue[0]*5);
+                ctx.fillStyle = Color(160, 160, 175+color2*16); 
+            }
+                ctx.fillRect(x,y,2,2); 
+        }
+    }
+    drawData(false);
+}
+
+function trainEpoch(learn, mome)
+{
+    var dataIndex = new Array(neuralData.length);
+    for (var i = 0; i < neuralData.length; i++)
+    {
+        dataIndex[i] = i;
+    }
+    
+    var temp;
+    for (var i = 0; i < dataIndex.length; i++)
+    {
+        var newI = Math.floor(Math.random() * (dataIndex.length -1));
+        if (i !== newI)
+        {
+            temp = dataIndex[i];
+            dataIndex[i] = dataIndex[newI];
+            dataIndex[newI] = temp;
+        }
+    }
+    
+    var totalError = 0.0;
+    var learningDataCount = 0;
+    var error = 0.0;
+    
+    var idealValues = new Array(2);
+    for (var i = 0; i < neuralData.length; i++ )
+    {
+        var ind = dataIndex[i];
+        network.layers[0].outputValue[0] = neuralData[ind].x;
+        network.layers[0].outputValue[1] = neuralData[ind].y;
+        
+        network.FeedForward();
+ 
+        idealValues[0] = 0;
+        idealValues[1] = 0;
+        if(neuralData[ind].color == 0 )
+        {
+			idealValues[0] = 1.0;
+        } else 
+        {
+			idealValues[1] = 1.0;
+        }
+
+        error = idealValues[0] - network.layers[2].outputValue[0];
+        totalError = totalError + error*error;
+        error = idealValues[1] - network.layers[2].outputValue[1];
+        totalError = totalError + error*error;
+   
+        network.Backpropagation(idealValues, learn, mome);
+    }
+    return totalError / neuralData.length;
+}
+
+function exportData()
+{
+    var tb = document.getElementById("import");
+    var jsonStr = JSON.stringify(neuralData);
+    tb.value = jsonStr;
+}
+function importData()
+{
+    var tb = document.getElementById("import");
+    neuralData = JSON.parse(tb.value);
+}
+</script>
+</head>
+<body>
+	<fieldset>
+		<legend>Control area</legend>
+		<div style="float: left;">
+			<div style="margin:10px">Hidden neurons: <select id="neurons"><option value="3">3</option><option value="5">5</option><option value="10">10</option><option value="20">20</option><option value="30">30</option><option value="50">50</option><option value="100">100</option></select><br>
+			Learning rate: <input type="text" id="learningRate" value="0.3" /><br>
+			Momentum: <input type="text" id="momentum" value="0.1" /></div>
+			FPS: <select id="fps"><option value="1">Jokainen frame</option><option value="2">Joka toinen frame</option><option value="5">Joka viides frame</option><option value="10">Joka kymmenes frame</option><option value="50">Joka viideskymmenes frame</option></select><br /><br/>
+			<canvas id="canvas" width="300" height="300"></canvas><br />
+			<input id="Start" type="submit" value="Calculate" onclick="calculateNV();"/>
+			<input id="Stop" type="submit" value="Stop" onclick="stopNV();" />
+			<input id="Clear" type="submit" value="Clear data" onclick="if(nvRunning==0) { clearNeuralData(); drawData(true); }" /><br />
+			<input id="Sin1" type="submit" value="Sin1" onclick="if(nvRunning==0) { basicData();}" />
+			<input id="Sin2" type="submit" value="Sin2" onclick="if(nvRunning==0) { basicData2();}" /> 
+		</div>
+		<div style="float: left;margin-left: 20px; width: 500px;">
+			<p><div id="epoch">Epoch: 0</div><br />
+			<div id="error">Error: 1</div>
+			<p>Ohje:
+			<p>Canvaksella näkyy opetusaineistoa(pisteitä), joita voi lisäti itse / tyhjentää. Vasen hiiren nappi tekee sinisen pisteen ja  vasen hiiren nappi shifti pohjassa tekee punaisen pisteen. Kun tarpeeksi pisteitä on ruudulla, niin voi yrittää antaa neuroverkon opetella pisteet painamalla "Calculate."
+			<p>Riippuen pisteiden määrästä ja paikoista, niin siniset ja punaiset alueet osuvat oikeaan muutaman sadan kierroksen (Epoch) aikana. Neuroverkko on kuitenkin kevyt: kaksi input neuronia, 3-100 hidden neuronia ja kaksi output neuronia, joten se ei monimutkaisia alueita kovin hyvin hanskaa. 
+			<p>Värilliset alueet lasketaan antamalla neuroverkolle X- ja Y-koordinaatti ja kysymällä mikä sen ajatteleman väri on. Tällöin mitä vähemmän opetettavia pisteitä (käyttäjän antamat pisteet) niin sitä epämääräisempi tulos on.
+			<p>Pisteitä voi viedä/tuoda ohjelmaan JSON:na. Verkon painoja ei vielä voi tuoda/viedä. 
+		</div>
+	</fieldset>
+	<fieldset>
+		<legend>Data import/export</legend>
+		<input id="Export" type="submit" value="Export data" onclick="exportData();" />
+		<input id="Import" type="submit" value="Import data" onclick="if(nvRunning==0) {importData(); drawData(true);}" />
+		<br />
+		<textarea name="textarea" id="import" cols="80" rows="15"></textarea>
+	</fieldset>
+</body>
+</html>
